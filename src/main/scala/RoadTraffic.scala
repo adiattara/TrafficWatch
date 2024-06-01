@@ -10,19 +10,23 @@ object RoadTraffic extends App {
   val config = ConfigFactory.load()
   val inputStream = config.getString("Stream.input")
   val checkpointPath = config.getString("Stream.checkpoint")
-  val sinkPath = config.getString("Stream.sink")
 
-  // Create the Spark Session
-  val boolVal1 = true
-  val boolVal2 = true
+  val sinkPath = config.getString("Stream.sink")
+  val cloudCheckpointPath = config.getString("CLOUD-STORAGE.checkpoint")
+  val cloudSinkPath = config.getString("CLOUD-STORAGE.sink")
+
+
   val spark = SparkSession.builder
     .master("local[*]")
     .appName("Streaming Process Files")
-    .config("spark.streaming.stopGracefullyOnShutdown", boolVal1)
+    .config("spark.hadoop.fs.s3a.access.key", config.getString("AWS.accessKey ")) // Set the AWS access key
+    .config("spark.hadoop.fs.s3a.secret.key", config.getString("AWS.secret"))  // Set the AWS secret key
+    .config ("spark.hadoop.fs.s3a.endpoint.region", "eu-west-1")   // Set the AWS region
+    .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
     .getOrCreate()
 
-  // To allow automatic schema inference while reading
-  spark.conf.set("spark.sql.streaming.schemaInference", boolVal2)
+
+  spark.conf.set("spark.sql.streaming.schemaInference", "true")
 
   //todo : make a test unitaire for this function
   def filterTtravelTimeReliability(streamDF: DataFrame) : DataFrame =  {
@@ -33,6 +37,7 @@ object RoadTraffic extends App {
   def imputationColumnSensCircule(streamDF: DataFrame) : DataFrame = {
     return streamDF.na.fill("Double sens", Seq("sens_circule"))
   }
+
 //todo : make a test unitaire for this function
   val mode: Seq[String] => String = (values: Seq[String]) => {
     if (values.isEmpty) null
@@ -40,9 +45,9 @@ object RoadTraffic extends App {
   }
   //create a UDF for the mode function
   val modeUDF = udf(mode)
-
   def myAggregation(streamDF: DataFrame) : DataFrame = {
     val df = streamDF
+      .withWatermark("datetime", "1 minute")
       .select(col("denomination"),col("datetime"), col("averageVehicleSpeed"), col("travelTime"), col
       ("travelTimeReliability"), col("trafficStatus"), col("vehicleProbeMeasurement"), col("vitesse_maxi"))
       .groupBy(col("denomination"), col("datetime"))
@@ -68,12 +73,24 @@ object RoadTraffic extends App {
       .option("header", "true")
       .csv(batchOutputDir)
   }
+
+  def save_to_database(df: DataFrame, epoch_id: Long): Unit = {
+    df.write
+      .format("jdbc")
+      .mode("append")
+      .option("url", "jdbc:postgresql://localhost:5432/spark_db")
+      .option("driver", "org.postgresql.Driver")
+      .option("dbtable", "traffic_table")
+      .option("user", "spark_user")
+      .option("password", "password")
+      .save()
+  }
+
   // Create the json to read from the input directory
   val jsonDF = spark.readStream
     .format("json")
     .option("maxFilesPerTrigger", 1)
     .load(inputStream)
-
 
   val StreamDF = jsonDF
     .withColumn("result", explode(col("results")))
@@ -95,15 +112,15 @@ object RoadTraffic extends App {
       col("result.vitesse_maxi").as("vitesse_maxi")
     )
 
-  val aggDF = myAggregation(StreamDF)
-  val filterDF = filterTtravelTimeReliability(aggDF)
-  //
-  filterDF
+  val streamDfBis = StreamDF.withColumn("datetime", to_timestamp(col("datetime")).as("datetime"))
+
+  val aggDF = myAggregation(streamDfBis)
+
+  aggDF
     .writeStream
-    .outputMode("complete")
     .option("checkpointLocation", checkpointPath)
-    .foreachBatch(saveToCSV(_, _, sinkPath))
-    .trigger(Trigger.ProcessingTime("10 seconds"))
+    .outputMode("append").foreachBatch(save_to_database(_, _))
+    .trigger(Trigger.ProcessingTime("60 seconds"))
     .start()
     .awaitTermination()
 }
