@@ -18,3 +18,9 @@ libraryDependencies += "org.apache.hadoop" % "hadoop-common" % "3.3.3" // for ha
 libraryDependencies += "com.typesafe" % "config" % "1.4.3"  // for reading application.conf
 
 libraryDependencies +=  "org.scalaj" %% "scalaj-http" % "2.4.2"
+
+// https://mvnrepository.com/artifact/org.scalatest/scalatest
+libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.18" % Test
+
+// https://mvnrepository.com/artifact/org.postgresql/postgresql
+libraryDependencies += "org.postgresql" % "postgresql" % "42.7.3"

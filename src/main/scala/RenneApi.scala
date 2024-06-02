@@ -1,4 +1,6 @@
 import com.typesafe.config.ConfigFactory
+import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.spark.sql.SparkSession
 import scalaj.http.Http
 
 import java.io.PrintWriter
@@ -6,9 +8,50 @@ import java.nio.file.{Files, Paths}
 import scala.concurrent.duration._
 object RenneApi extends App {
 
-  // define the api url
+  // define the api url local
   val config = ConfigFactory.load("application.conf")
+  val inputStream = config.getString("Stream.input")
 
+  //prod
+  val cloudInputStream = config.getString("CLOUD-STORAGE.input")
+
+  val spark = SparkSession.builder
+    .master("local[*]")
+    .appName("Fetch Api Files")
+    .config("spark.hadoop.fs.s3a.access.key", config.getString("AWS.accessKey ")) // Set the AWS access key
+    .config("spark.hadoop.fs.s3a.secret.key", config.getString("AWS.secret"))  // Set the AWS secret key
+    .config ("spark.hadoop.fs.s3a.endpoint.region", "eu-west-1")   // Set the AWS region
+    .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+    .getOrCreate()
+
+  def fetchDataAndWriteToS3(): Unit = {
+      // fetch data from the api
+      val response = Http(config.getString("API.url")).asString
+
+      // convert data to json
+      val jsonString = response.body
+
+      // create a file name based on the current timestamp
+      val fileName = s"${System.currentTimeMillis()}.json"
+
+      // write the json response to  s3 bucket
+      val filePath = new Path(s"$cloudInputStream/$fileName")
+
+      // get the Hadoop FileSystem
+      val fs = FileSystem.get(new java.net.URI(s"s3a://trafficwatch1"), spark.sparkContext.hadoopConfiguration)
+
+      // create an output stream
+      val outputStream = fs.create(filePath)
+
+      // write the data
+      outputStream.writeBytes(jsonString)
+
+      // close the stream
+      outputStream.close()
+
+      //todo : use logger instead of println
+      println(s"Data written to file: $fileName in S3 bucket: $cloudInputStream")
+  }
   def fetchDataAndWriteToFile(): Unit = {
     val response = Http(config.getString("API.url")).asString
 
@@ -28,7 +71,6 @@ object RenneApi extends App {
      //todo: use logger instead of println
     println(s"Data written to file: $fileName")
   }
-
   //define a scheduler to fetch data every minute
   val duration = Duration(1, MINUTES)
   val scheduler = new java.util.Timer()
@@ -39,9 +81,10 @@ object RenneApi extends App {
     }
   }, 0, duration.toMillis)
 
-  // Arrêter la planification après 6 minutes
-  Thread.sleep(15 * 60 * 1000)
-  scheduler.cancel()
+  // Keep the application running indefinitely
+  while (true) {
+    Thread.sleep(1000)
+  }
 
 
 }
