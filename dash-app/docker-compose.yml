@@ -1,0 +1,15 @@
+version: "3.8"
+services:
+    dash_server:
+        build: .
+        image: dash-traffic-app:latest
+        container_name: dash-traffic-service
+        ports:
+        - "8050:8050"
+        networks:
+          - spark-network
+
+        command: ["python", "main.py"]
+networks:
+    spark-network:
+        external: true
