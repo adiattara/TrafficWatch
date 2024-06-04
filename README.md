@@ -24,24 +24,24 @@ Our goal is to provide a real-time traffic monitoring system that can be used by
     - Retrieves the data from the PostgreSQL database and creates visualizations using the DASH framework.
 
 ## Technologies Used
-
-- **Structure Streaming**: For real-time data processing.
+- **Sbt**: For building a Scala project.
 - **Docker**: For containerizing the applications.
 - **PostgreSQL**: As the database to store traffic data.
-- **dash**: a python framework for building web app for data visulisation.
+- **Plotly Dash**: a python framework for building web app for data visulisation.
 
 ## Setup Instructions
 
 ### Prerequisites
 
-- Docker, Docker Compose installed on your machine and IntelliJ also.
+- **Docker and Docker Compose** need to be installed on your machine.
+- **Sbt** should be installed on your machine to compile and run the project.
 
 ### Steps to Run the Project
 
 1. **Clone the repository**:
 
     ```bash 
-      git https://github.com/adiattara/TrafficWatch.git
+       git https://github.com/adiattara/TrafficWatch.git
        cd TrafficWatch
     ```
 
@@ -53,26 +53,34 @@ Our goal is to provide a real-time traffic monitoring system that can be used by
     cd database-service
     docker-compose up -d
     ```
+3. **Compile the project**:
 
-3. **Run the Streaming Application**:
+   Navigate to the `TrafficWatch` directory and compile the project using sbt:
+    ```bash
+     sbt compile
+    ```
+4. **Run the RenneApi programme**:
 
-   Navigate to the `TrafficWatch/src/main/scala` directory then run `RoadTraffic.scala`
+    it will fetch the data from the API and store it in a directory:
+    ```bash
+    sbt "runMain RenneApi"
+    ```
 
-4. **Run the Structured Streaming**:
+5. **Run the Structured Streaming application**:
+    it will read the data from the directory transform store it in the database.
+     ```bash
+     sbt "runMain TrafficWatch"
+     ```
 
-   Navigate to the `TrafficWatch/src/main/scala` directory and run `RoadTraffic.scala`
-
-
-5. **Build and Start the DASH Application**:
+6. **Build and Start the DASH Application**:
 
    Navigate to the `dash-app` directory and start it using Docker Compose:
-
     ```bash
     cd dash-app
     docker-compose up --build
     ```
 
-6. **Access the DASH Application**:
+7. **Access the DASH Application**:
 
    Open your web browser and navigate to `http://localhost:8050` to view the traffic data visualizations.
 
