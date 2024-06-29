@@ -9,7 +9,7 @@ services:
         networks:
           - spark-network
 
-        command: ["python", "main.py"]
+        entrypoint: ["poetry", "run", "dash_server"]
 networks:
     spark-network:
         external: true
