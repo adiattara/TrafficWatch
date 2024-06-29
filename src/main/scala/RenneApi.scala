@@ -8,25 +8,25 @@ import java.nio.file.{Files, Paths}
 import scala.concurrent.duration._
 object RenneApi extends App {
 
-  // define the api url local
-  val config = ConfigFactory.load("application.conf")
-  val inputStream = config.getString("Stream.input")
-
-  //prod
-  val cloudInputStream = config.getString("CLOUD-STORAGE.input")
+  val apiUrl = ConfigManager.getApiUrl
+  val apiOutput = ConfigManager.getApiOutput
+  val inputStream = ConfigManager.getInputStream
+  val cloudInputStream = ConfigManager.getCloudInputStream
+  val accesKey = ConfigManager.getAccesKey
+  val awsSecret = ConfigManager.getAwsSecret
 
   val spark = SparkSession.builder
     .master("local[*]")
     .appName("Fetch Api Files")
-    .config("spark.hadoop.fs.s3a.access.key", config.getString("AWS.accessKey ")) // Set the AWS access key
-    .config("spark.hadoop.fs.s3a.secret.key", config.getString("AWS.secret"))  // Set the AWS secret key
+    .config("spark.hadoop.fs.s3a.access.key", accesKey) // Set the AWS access key
+    .config("spark.hadoop.fs.s3a.secret.key", awsSecret)  // Set the AWS secret key
     .config ("spark.hadoop.fs.s3a.endpoint.region", "eu-west-1")   // Set the AWS region
     .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
     .getOrCreate()
 
   def fetchDataAndWriteToS3(): Unit = {
       // fetch data from the api
-      val response = Http(config.getString("API.url")).asString
+      val response = Http(apiUrl).asString
 
       // convert data to json
       val jsonString = response.body
@@ -53,14 +53,14 @@ object RenneApi extends App {
       println(s"Data written to file: $fileName in S3 bucket: $cloudInputStream")
   }
   def fetchDataAndWriteToFile(): Unit = {
-    val response = Http(config.getString("API.url")).asString
+    val response = Http(apiUrl).asString
 
     // convert data to json
     val jsonString = response.body
 
     // create a file name based on the current timestamp
     val fileName = s"${System.currentTimeMillis()}.json"
-    val filePath = Paths.get(config.getString("API.output"), fileName)
+    val filePath = Paths.get(apiOutput, fileName)
 
     // write data to file
     Files.createDirectories(filePath.getParent)

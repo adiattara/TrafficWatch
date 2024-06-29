@@ -1,90 +1,33 @@
-import com.typesafe.config.ConfigFactory
-import org.apache.spark.sql.{Column, DataFrame, Dataset, Row, SparkSession}
+
+import org.apache.spark.sql.{SparkSession,DataFrame}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.streaming.Trigger
-import org.apache.spark.sql.types._
-
+import Transformation._
+import Connectors._
 object RoadTraffic extends App {
 
   // Load the configuration file
-  val config = ConfigFactory.load()
-  val inputStream = config.getString("Stream.input")
-  val checkpointPath = config.getString("Stream.checkpoint")
 
-  val sinkPath = config.getString("Stream.sink")
-  val cloudCheckpointPath = config.getString("CLOUD-STORAGE.checkpoint")
-  val cloudSinkPath = config.getString("CLOUD-STORAGE.sink")
+  val inputStream = ConfigManager.getStreamInput
+  val checkpointPath = ConfigManager.getCheckpointPath
+
+  val cloudCheckpointPath = ConfigManager.getCloudCheckpointPath
+  val cloudSinkPath = ConfigManager.getCloudSinkPath
+  val cloudInputStream = ConfigManager.getCloudInputStream
 
 
   val spark = SparkSession.builder
     .master("local[*]")
     .appName("Streaming Process Files")
-    .config("spark.hadoop.fs.s3a.access.key", config.getString("AWS.accessKey ")) // Set the AWS access key
-    .config("spark.hadoop.fs.s3a.secret.key", config.getString("AWS.secret"))  // Set the AWS secret key
+    .config("spark.hadoop.fs.s3a.access.key", ConfigManager.getAccesKey) // Set the AWS access key
+    .config("spark.hadoop.fs.s3a.secret.key", ConfigManager.getAccesKey)  // Set the AWS secret key
     .config ("spark.hadoop.fs.s3a.endpoint.region", "eu-west-1")   // Set the AWS region
     .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
     .getOrCreate()
 
 
   spark.conf.set("spark.sql.streaming.schemaInference", "true")
-
-  //todo : make a test unitaire for this function
-  def filterTtravelTimeReliability(streamDF: DataFrame) : DataFrame =  {
-    return streamDF.filter(col("meanTravelTimeReliability") > 50)
-  }
-
-  //todo : make a test unitaire for this function
-  def imputationColumnSensCircule(streamDF: DataFrame) : DataFrame = {
-    return streamDF.na.fill("Double sens", Seq("sens_circule"))
-  }
-
-//todo : make a test unitaire for this function
-  val mode: Seq[String] => String = (values: Seq[String]) => {
-    if (values.isEmpty) null
-    else values.groupBy(identity).mapValues(_.size).maxBy(_._2)._1
-  }
-  //create a UDF for the mode function
   val modeUDF = udf(mode)
-  def myAggregation(streamDF: DataFrame) : DataFrame = {
-    val df = streamDF
-      .withWatermark("datetime", "1 minute")
-      .select(col("denomination"),col("datetime"), col("averageVehicleSpeed"), col("travelTime"), col
-      ("travelTimeReliability"), col("trafficStatus"), col("vehicleProbeMeasurement"), col("vitesse_maxi"))
-      .groupBy(col("denomination"), col("datetime"))
-      .agg(
-        count("*").alias("nbTroconPerRoad"),
-        sum("vehicleProbeMeasurement").alias("nbVehiculePerRoad"),
-        mean("averageVehicleSpeed").alias("meanVitessePerRoad"),
-        max("vitesse_maxi").alias("vitesseMaximumPerRoad"),
-        mean("travelTime").alias("meanTravelTime"),
-        mean("travelTimeReliability").alias("meanTravelTimeReliability"),
-        collect_list(col("trafficStatus")).as("trafficStatusList")
-      ).coalesce(1)
-
-    return df.select(col("denomination"),col("datetime"),col("nbTroconPerRoad"),col("nbVehiculePerRoad"), col
-    ("meanVitessePerRoad"), col("vitesseMaximumPerRoad"), col("meanTravelTime"), col("meanTravelTimeReliability"),
-      modeUDF(col("trafficStatusList")).as("stateGeneralTrafic"))
-  }
-
-  def saveToCSV(df: Dataset[Row], batchId: Long, outputDir: String): Unit = {
-    val batchOutputDir = s"$outputDir/batch_$batchId"
-    df
-      .write
-      .option("header", "true")
-      .csv(batchOutputDir)
-  }
-
-  def save_to_database(df: DataFrame, epoch_id: Long): Unit = {
-    df.write
-      .format("jdbc")
-      .mode("append")
-      .option("url", "jdbc:postgresql://localhost:5432/spark_db")
-      .option("driver", "org.postgresql.Driver")
-      .option("dbtable", "traffic_table")
-      .option("user", "spark_user")
-      .option("password", "password")
-      .save()
-  }
 
   // Create the json to read from the input directory
   val jsonDF = spark.readStream
