@@ -55,15 +55,37 @@ object RoadTraffic extends App {
       col("result.vitesse_maxi").as("vitesse_maxi")
     )
 
+  val mapDF = jsonDF
+    .withColumn("result", explode(col("results"))).select(
+      col("result.denomination").alias("name"),
+      col("result.datetime").alias("datetime"),
+      col("result.trafficstatus").alias("status"),
+      to_json(col("result.geo_shape.geometry.coordinates")).alias("coordinates")
+    )
+
+
   val streamDfBis = StreamDF.withColumn("datetime", to_timestamp(col("datetime")).as("datetime"))
 
   val aggDF = myAggregation(streamDfBis)
 
-  aggDF
-    .writeStream
-    .option("checkpointLocation", checkpointPath)
-    .outputMode("append").foreachBatch(save_to_database(_, _))
+  val q1 =mapDF.writeStream.
+    outputMode("update").foreachBatch { (batchDF: DataFrame, batchId: Long) =>
+    save_to_database(batchDF, batchId, "my_traffic_map")
+
+  }
     .trigger(Trigger.ProcessingTime("60 seconds"))
     .start()
-    .awaitTermination()
+
+  val q2 = aggDF
+    .writeStream
+    .option("checkpointLocation", checkpointPath)
+    .outputMode("append").foreachBatch((batchDF: DataFrame, batchId: Long) =>
+      save_to_database(batchDF, batchId, "my_traffic_table"))
+    .trigger(Trigger.ProcessingTime("60 seconds"))
+    .start()
+
+  q1.awaitTermination()
+  q2.awaitTermination()
+
+
 }
