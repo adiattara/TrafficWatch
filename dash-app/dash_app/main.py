@@ -1,14 +1,16 @@
 import dash
+import folium
 from dash import dcc, html
 from dash.dependencies import Input, Output
 import pandas as pd
 import plotly.graph_objs as go
 import sqlalchemy
+import json
 def postgres_engine():
     return sqlalchemy.create_engine('postgresql://spark_user:password@postgres_database:5432/spark_db')
 def load_data():
         conection = postgres_engine().connect()
-        data = pd.read_sql("SELECT * FROM traffic", con=conection)
+        data = pd.read_sql("SELECT * FROM my_traffic_table", con=conection)
         conection.close()
         data['datetime'] = pd.to_datetime(data['datetime'], utc=True)
         data.dropna(subset=['nbVehiculePerRoad', 'meanVitessePerRoad', 'vitesseMaximumPerRoad', 'meanTravelTime'],
@@ -16,35 +18,91 @@ def load_data():
         data.sort_values('datetime', inplace=True)
         data['speedDeviation'] = data['vitesseMaximumPerRoad'] - data['meanVitessePerRoad']
         return data
-def dash_app():
+
+def load_data_map():
+
+    queries = """select * from my_traffic_map where datetime in (select max(datetime) from my_traffic_map)"""
+
+    connection = postgres_engine().connect()
+
+    df = pd.read_sql(queries, connection)
+
+    connection.close()
+
+    road = [dict(name=row['name'], status=row['status'], coordinates=json.loads(row['coordinates'])) for _, row in
+            df.iterrows()]
+
+    return road
+
+def get_color(status):
+    colors = {
+        'freeFlow': 'green',
+        'heavy': 'red',
+        'medium': 'orange',
+        'slow': 'yellow'
+    }
+    return colors.get(status, 'blue')
+
+def create_map(roads):
+    # Centrer la carte sur Rennes avec le zoom souhaité
+    m = folium.Map(location=[47.915407, -1.656561], zoom_start=11.49, max_bounds=True)
+    folium.TileLayer('openstreetmap', overlay=True, control=False, opacity=0.5).add_to(m)
+    # Ajouter une attribution pour l'auteur
+    folium.map.LayerControl().add_to(m)
+    folium.map.Marker(
+        location=[47.915407, -1.656561],
+        popup='Centre de Rennes',
+        icon=folium.Icon(icon='info-sign')
+    ).add_to(m)
+    folium.map.CustomPane("labels").add_to(m)
+    folium.Marker(
+        location=[48.1173, -1.6778],
+        icon=folium.Icon(color='green')
+    ).add_to(m)
+
+    # Ajouter un script pour centrer la barre de défilement par défaut
+
+    for road in roads:
+        color = get_color(road['status'])
+        coordinates = road['coordinates'][0]
+        folium.PolyLine(locations=[[lat, lon] for lon, lat in coordinates], color=color, weight=5).add_to(m)
+    return m._repr_html_()  # Returns the HTML representation of the map
+
+#
+if __name__ == '__main__':
     # Initialize the Dash app
     app = dash.Dash(__name__)
 
     # Define the layout of the app
     app.layout = html.Div([
+
+        html.Div([
+            html.Iframe(id='map', srcDoc=create_map(load_data_map()), width='100%', height='350'),
+            # Hauteur de la carte ajustée à 300px
+        ], style={'width': '100%', 'height': '20%'}),
         html.H1('Traffic Data Visualization by Metric'),
         dcc.Dropdown(
             id='road-dropdown',
             options=[],
             value=None
         ),
+        # Ajuster la hauteur de la division de la carte
         html.Div([
-            dcc.Graph(id='vehicles-graph'),
-            dcc.Graph(id='avg-speed-graph'),
-            dcc.Graph(id='travel-time-graph'),
-            dcc.Graph(id='speed-deviation-graph')
+            dcc.Graph(id='avg-speed-graph', style={'height': '500px', 'width': '48%'}),
+            dcc.Graph(id='travel-time-graph', style={'height': '500px', 'width': '48%'}),
         ], style={
-            'display': 'grid',
-            'grid-template-columns': '1fr 1fr',
-            'grid-gap': '20px'
+            'display': 'flex',
+            'flex-direction': 'row',
+            'justify-content': 'space-between',
+            'align-items': 'center',
+            'height': '70%'  # Ajuster la hauteur de la division des graphiques
         }),
         dcc.Interval(
             id='interval-component',
-            interval=1 *60*1000,  # Refresh every 1 minute
+            interval=1 * 60 * 1000,  # Rafraîchir toutes les 1 minute
             n_intervals=0
         )
     ])
-
 
     # Function to load data from the databas
     data = load_data()
@@ -66,30 +124,14 @@ def dash_app():
 
     # Define callback to update graphs based on selected road and interval
     @app.callback(
-        [Output('vehicles-graph', 'figure'),
+        [
          Output('avg-speed-graph', 'figure'),
          Output('travel-time-graph', 'figure'),
-         Output('speed-deviation-graph', 'figure')],
         [Input('road-dropdown', 'value'),
-         Input('interval-component', 'n_intervals')]
+         Input('interval-component', 'n_intervals')]]
     )
     def update_graphs(selected_road, n_intervals):
         filtered_data = data[data['denomination'] == selected_road]
-
-        # Number of Vehicles
-        vehicles_trace = go.Scatter(
-            x=filtered_data['datetime'],
-            y=filtered_data['nbVehiculePerRoad'],
-            mode='lines+markers',
-            name='Number of Vehicles',
-            line=dict(color='blue')
-        )
-        vehicles_fig = {
-            'data': [vehicles_trace],
-            'layout': go.Layout(title='Number of Vehicles for ' + selected_road, xaxis={'title': 'Time'},
-                                yaxis={'title': 'Number of Vehicles'})
-        }
-
         # Average Speed
         avg_speed_trace = go.Scatter(
             x=filtered_data['datetime'],
@@ -118,21 +160,16 @@ def dash_app():
                                 yaxis={'title': 'Travel Time (seconds)'})
         }
 
-        # Speed Deviation
-        speed_deviation_trace = go.Scatter(
-            x=filtered_data['datetime'],
-            y=filtered_data['speedDeviation'],
-            mode='lines+markers',
-            name='Speed Deviation',
-            line=dict(color='purple')
-        )
-        speed_deviation_fig = {
-            'data': [speed_deviation_trace],
-            'layout': go.Layout(title='Speed Deviation for ' + selected_road, xaxis={'title': 'Time'},
-                                yaxis={'title': 'Speed Deviation (km/h)'})
-        }
 
-        return vehicles_fig, avg_speed_fig, travel_time_fig, speed_deviation_fig
+
+        return  avg_speed_fig, travel_time_fig
+
+    @app.callback(
+        Output('map', 'srcDoc'),
+        Input('interval-component', 'n_intervals')
+    )
+    def update_map(n_intervals):
+        return create_map(load_data_map())
 
     app.run_server(host='0.0.0.0', port=8050, debug=True)
 
