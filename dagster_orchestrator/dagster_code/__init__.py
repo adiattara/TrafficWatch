@@ -1,18 +1,17 @@
-from .script import topstory_ids_assets,topstory_ids
+from .ingestion import  near_real_time_data_ingestion
 
 from dagster import Definitions, ScheduleDefinition
 
 defs = Definitions(
 
     schedules=[
-
         ScheduleDefinition(
-            job =topstory_ids,
-            cron_schedule="2 * * * 1-5",
+            job =near_real_time_data_ingestion,
+            cron_schedule="* * * * *",
             execution_timezone="Europe/Paris"
-        ),
+        )
     ],
-    assets=[topstory_ids_assets]
+    jobs=[near_real_time_data_ingestion]
 
 )
 
