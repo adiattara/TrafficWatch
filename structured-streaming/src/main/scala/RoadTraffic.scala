@@ -1,26 +1,23 @@
 
-import org.apache.spark.sql.{SparkSession,DataFrame}
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.streaming.Trigger
 import Transformation._
 import Connectors._
+import org.apache.spark.internal.config
 object RoadTraffic extends App {
 
-  // Load the configuration file
-
-  val inputStream = ConfigManager.getStreamInput
-  val checkpointPath = ConfigManager.getCheckpointPath
 
   val cloudCheckpointPath = ConfigManager.getCloudCheckpointPath
-  val cloudSinkPath = ConfigManager.getCloudSinkPath
   val cloudInputStream = ConfigManager.getCloudInputStream
+
 
 
   val spark = SparkSession.builder
     .master("local[*]")
     .appName("Streaming Process Files")
     .config("spark.hadoop.fs.s3a.access.key", ConfigManager.getAccesKey) // Set the AWS access key
-    .config("spark.hadoop.fs.s3a.secret.key", ConfigManager.getAccesKey)  // Set the AWS secret key
+    .config("spark.hadoop.fs.s3a.secret.key", ConfigManager.getAwsSecret)  // Set the AWS secret key
     .config ("spark.hadoop.fs.s3a.endpoint.region", "eu-west-1")   // Set the AWS region
     .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
     .getOrCreate()
@@ -33,7 +30,7 @@ object RoadTraffic extends App {
   val jsonDF = spark.readStream
     .format("json")
     .option("maxFilesPerTrigger", 1)
-    .load(inputStream)
+    .load(cloudInputStream)
 
   val StreamDF = jsonDF
     .withColumn("result", explode(col("results")))
@@ -78,7 +75,7 @@ object RoadTraffic extends App {
 
   val q2 = aggDF
     .writeStream
-    .option("checkpointLocation", checkpointPath)
+    .option("checkpointLocation", cloudCheckpointPath)
     .outputMode("append").foreachBatch((batchDF: DataFrame, batchId: Long) =>
       save_to_database(batchDF, batchId, "my_traffic_table"))
     .trigger(Trigger.ProcessingTime("60 seconds"))
