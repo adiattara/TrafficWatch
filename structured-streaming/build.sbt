@@ -4,7 +4,7 @@ ThisBuild / scalaVersion := "2.13.0"
 
 lazy val root = (project in file("."))
   .settings(
-    name := "TrafficWatch"
+    name := "structured-streaming",
   )
 libraryDependencies += "org.apache.spark" %% "spark-core" % "3.3.3"
 

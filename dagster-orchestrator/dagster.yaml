@@ -1,0 +1,19 @@
+scheduler:
+  module: dagster.core.scheduler
+  class: DagsterDaemonScheduler
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: QueuedRunCoordinator
+
+storage:
+  postgres:
+    postgres_db:
+      username:
+        env: POSTGRES_USER
+      password:
+        env: POSTGRES_PASSWORD
+      hostname:
+        env: POSTGRES_HOST
+      db_name:
+        env: POSTGRES_DB
+      port: 5432
