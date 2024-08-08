@@ -35,7 +35,16 @@ data, and stores it in a PostgreSQL data warehouse . The system is built using S
     docker-compose up -d
     ```
 
-3. **Compile the project**:
+
+3. **Create checkpoint path**:
+
+   Navigate to the `structured-streaming` directory and then :
+
+    ```bash
+    cd structured-streaming
+    mkdir -p src/main/data/checkpoint
+    ```
+4. **Compile the project**:
 
    Navigate to the `structured-streaming` directory and compile the project using sbt:
 

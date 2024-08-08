@@ -8,6 +8,7 @@ object ConfigManager {
   def getApiUrl: String = config.getString("API.url")
   def getApiOutput: String = config.getString("API.output")
 
+  def getCheckpointPath = config.getString("Stream.checkpoint")
 
 
   def getCloudInputStream: String = config.getString("CLOUD-STORAGE.input")
