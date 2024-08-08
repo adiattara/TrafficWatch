@@ -8,8 +8,8 @@ import org.apache.spark.internal.config
 object RoadTraffic extends App {
 
 
-  val cloudCheckpointPath = ConfigManager.getCloudCheckpointPath
   val cloudInputStream = ConfigManager.getCloudInputStream
+  val checkpointPath = ConfigManager.getCheckpointPath
 
 
 
@@ -75,8 +75,8 @@ object RoadTraffic extends App {
 
   val q2 = aggDF
     .writeStream
-    .option("checkpointLocation", cloudCheckpointPath)
-    .outputMode("append").foreachBatch((batchDF: DataFrame, batchId: Long) =>
+    .option("checkpointLocation", checkpointPath)
+    .outputMode("update").foreachBatch((batchDF: DataFrame, batchId: Long) =>
       save_to_database(batchDF, batchId, "my_traffic_table"))
     .trigger(Trigger.ProcessingTime("60 seconds"))
     .start()
