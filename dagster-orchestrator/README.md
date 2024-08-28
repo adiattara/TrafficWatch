@@ -8,11 +8,11 @@ ensuring that the most recent data is always available for analysis and processi
 
 The project mainly consists of two Python files: `__init__.py` and `ingestion.py`.
 
-### `__init__.py`
+#### `__init__.py` file :
 
 This file is used to define the Dagster job and schedule. The job `near_real_time_data_ingestion` is defined here, which is scheduled to run every minute.
 
-### `ingestion.py`
+#### `ingestion.py` File
 
 This file contains the main logic for data ingestion. It defines an operation `fetch_and_write_data_to_s3_bucket` that fetches data from the API and writes it to an S3 bucket.
 
