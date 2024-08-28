@@ -42,7 +42,7 @@ To set up the TrafficWatch pipeline on your own system, follow these steps:
 
 ### 1. **Set up a Data Lake in AWS**:
 - You need an AWS account. If you don't have one, you can create it [here](https://aws.amazon.com/).
-- Create AWS Access Keys (Access Key ID and Secret Access Key). Follow this [video](https://www.youtube.com/watch?v=KngM5bfpttA)for guidance 
+- Create AWS Access Keys (Access Key ID and Secret Access Key). Follow this [video](https://youtu.be/eElHCn4nDZw?si=y6ENr45LjPrh3boh)  for guidance 
  on how to create AWS Access Keys.
 - Create an S3 bucket. In this project, we call it `trafficwatch1`. Note that bucket names in AWS must be unique
   so you will need to define your unique name. This implies to update `dagster-orchestrator/.env` and 
